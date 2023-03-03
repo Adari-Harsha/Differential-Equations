@@ -2,6 +2,6 @@
 
 + Directional Field of ODE
 + Picard Iteration
-+ Solving Diffrential equations using diffrent Numerical Methods
++ Solving Differential equations using different Numerical Methods
 ----------------------------------------------------------------------------------------
 Adari Harsha Vardhan Sandep
