@@ -1,4 +1,4 @@
-# Diffrential-Equations
+# Differential-Equations
 
 + Directional Field of ODE
 + Picard Iteration
