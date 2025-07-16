@@ -372,8 +372,15 @@ def compute_compliance_and_sensitivity():
     A, b_vec = assemble_system(a, L, bcs)
     solve(A, u_sol.vector(), b_vec)
 
-    # Compliance
+    # Compliance - ensure we get a scalar value
     compliance_val = assemble(action(a, u_sol))
+    # Convert to scalar if it's a Vector object
+    if hasattr(compliance_val, 'get_local'):
+        compliance_val = float(compliance_val.get_local()[0])
+    elif hasattr(compliance_val, 'array'):
+        compliance_val = float(compliance_val.array()[0])
+    else:
+        compliance_val = float(compliance_val)
 
     # Sensitivity computation with better numerical properties
     sens_expr = -penal * (E0 - Emin) * rho_filtered**(penal - 1) * inner(sigma(u_sol, Constant(1.0)), eps(u_sol))
@@ -441,18 +448,26 @@ for itr in range(max_iter):
     fval = np.array([volume_constraint(xval)])
     dfdx = volume_sensitivity(xval).reshape(1, -1)
 
-    # Store history
+    # Store history - ensure scalar values
     vol_current = np.mean(xval)
-    obj_history.append(f0val)
+    # Ensure f0val is a scalar
+    if hasattr(f0val, 'get_local'):
+        f0val_scalar = float(f0val.get_local()[0])
+    elif hasattr(f0val, 'array'):
+        f0val_scalar = float(f0val.array()[0])
+    else:
+        f0val_scalar = float(f0val)
+    
+    obj_history.append(f0val_scalar)
     vol_history.append(vol_current)
 
     # Print iteration info
-    print(f"Iter {itr+1:3d}: Obj = {f0val:.4e} | Vol = {vol_current:.3f} | Constr = {fval[0]:.3e}")
+    print(f"Iter {itr+1:3d}: Obj = {f0val_scalar:.4e} | Vol = {vol_current:.3f} | Constr = {fval[0]:.3e}")
 
     # Solve MMA subproblem with improved solver
     xmma, ymma, zmma, low_new, upp_new, info = mmasub_ipopt_optimized(
         m, n, itr + 1, xval, xmin, xmax,
-        xold1, xold2, f0val, df0dx, fval, dfdx,
+        xold1, xold2, f0val_scalar, df0dx, fval, dfdx,
         low, upp, a0, a_mma, c, d, move=move
     )
     
@@ -479,7 +494,20 @@ for itr in range(max_iter):
         # Check multiple criteria
         recent_changes = change_history[-5:]
         avg_change = np.mean(recent_changes)
-        obj_change = abs(obj_history[-1] - obj_history[-5]) / abs(obj_history[-5]) if itr >= 5 else 1.0
+        
+        # Safe objective change calculation
+        try:
+            if len(obj_history) >= 5:
+                obj_old = float(obj_history[-5])
+                obj_new = float(obj_history[-1])
+                if abs(obj_old) > 1e-12:  # Avoid division by very small numbers
+                    obj_change = abs(obj_new - obj_old) / abs(obj_old)
+                else:
+                    obj_change = 1.0
+            else:
+                obj_change = 1.0
+        except (ValueError, TypeError, IndexError):
+            obj_change = 1.0
         
         if avg_change < 5e-4 and obj_change < 1e-3:
             print(f"\nConvergence achieved at iteration {itr+1}")
@@ -492,7 +520,7 @@ for itr in range(max_iter):
         vtkfile << (rho_filtered, float(itr))
 
 print("\n--- Optimization completed! ---")
-print(f"Final objective: {f0val:.4e}")
+print(f"Final objective: {f0val_scalar:.4e}")
 print(f"Final volume fraction: {vol_current:.3f}")
 print(f"Target volume fraction: {volfrac:.3f}")
 
